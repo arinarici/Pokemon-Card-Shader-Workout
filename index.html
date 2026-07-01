@@ -3,35 +3,202 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity Web Player | shader</title>
+    <title>Pokemon Card Shader</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        background: #0a0a0f;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      /* ── Landscape uyarısı (portrait modda gösterilir) ── */
+      #rotate-message {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: #0a0a0f;
+        color: #fff;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        z-index: 9999;
+        font-family: sans-serif;
+        font-size: 18px;
+        text-align: center;
+      }
+
+      #rotate-message svg {
+        width: 60px;
+        height: 60px;
+        animation: rotateIcon 2s ease-in-out infinite;
+      }
+
+      @keyframes rotateIcon {
+        0%   { transform: rotate(0deg); }
+        40%  { transform: rotate(90deg); }
+        100% { transform: rotate(90deg); }
+      }
+
+      @media screen and (orientation: portrait) and (max-width: 1024px) {
+        #rotate-message { display: flex; }
+        #unity-container { display: none; }
+      }
+
+      /* ── Unity container ── */
+      #unity-container {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0a0a0f;
+      }
+
+      #unity-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      /* ── Loading ekranı ── */
+      #loading-screen {
+        position: fixed;
+        inset: 0;
+        background: #0a0a0f;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 32px;
+        z-index: 100;
+        transition: opacity 0.6s ease;
+      }
+
+      #loading-screen.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      #loading-gif {
+        width: 180px;
+        height: 180px;
+        object-fit: contain;
+        /* Hafif yukarı-aşağı sallanma */
+        animation: float 2.5s ease-in-out infinite;
+      }
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50%       { transform: translateY(-12px); }
+      }
+
+      #loading-text {
+        color: #cccccc;
+        font-family: sans-serif;
+        font-size: 14px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        opacity: 0.7;
+      }
+
+      /* Progress bar */
+      #progress-bar-wrap {
+        width: 220px;
+        height: 4px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      #progress-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #6ec6ff, #a78bfa);
+        border-radius: 2px;
+        transition: width 0.3s ease;
+      }
+
+      /* Unity warning banner */
+      #unity-warning {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 200;
+      }
+
+      /* Fullscreen butonu */
+      #unity-footer {
+        position: fixed;
+        bottom: 10px;
+        right: 14px;
+        z-index: 50;
+      }
+
+      #unity-fullscreen-button {
+        width: 38px;
+        height: 38px;
+        background: rgba(255,255,255,0.12) url('TemplateData/fullscreen-button.png') center/20px no-repeat;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      #unity-fullscreen-button:hover {
+        background-color: rgba(255,255,255,0.22);
+      }
+    </style>
   </head>
   <body>
-    <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width=1920 height=1080 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
-        </div>
-      </div>
-      <div id="unity-warning"> </div>
-      <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
-        <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">shader</div>
+
+    <!-- Landscape uyarısı -->
+    <div id="rotate-message">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5">
+        <rect x="4" y="2" width="10" height="16" rx="2"/>
+        <path d="M17 8l3 3-3 3"/>
+        <line x1="14" y1="11" x2="20" y2="11"/>
+      </svg>
+      <span>Lütfen cihazınızı<br>yatay çevirin</span>
+    </div>
+
+    <!-- Loading ekranı -->
+    <div id="loading-screen">
+      <img id="loading-gif" src="eevee.gif" alt="Loading...">
+      <div id="loading-text">Yükleniyor...</div>
+      <div id="progress-bar-wrap">
+        <div id="progress-bar-fill"></div>
       </div>
     </div>
+
+    <!-- Unity -->
+    <div id="unity-container">
+      <canvas id="unity-canvas" tabindex="-1"></canvas>
+      <div id="unity-warning"></div>
+      <div id="unity-footer">
+        <div id="unity-fullscreen-button"></div>
+      </div>
+    </div>
+
     <script>
+      // ── Landscape kilit (destekleyen tarayıcılarda) ──
+      function lockLandscape() {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(function() {});
+        }
+      }
+      document.addEventListener('click', lockLandscape, { once: true });
+      lockLandscape();
+
+      // ── Unity kurulumu ──
       var canvas = document.querySelector("#unity-canvas");
 
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
       function unityShowBanner(msg, type) {
         var warningBanner = document.querySelector("#unity-warning");
         function updateBannerVisibility() {
@@ -63,71 +230,40 @@
         productName: "shader",
         productVersion: "0.1.0",
         showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
       };
 
-      // By default, Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
-
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
-
+      // Mobil: tam ekran canvas
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-
         var meta = document.createElement('meta');
         meta.name = 'viewport';
         meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        document.querySelector("#unity-container").className = "unity-mobile";
-        canvas.className = "unity-mobile";
-
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
-
-
+        document.head.appendChild(meta);
       } else {
-        // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
-        canvas.style.width = "1920px";
-        canvas.style.height = "1080px";
+        // Desktop: pencere boyutunu doldur
+        canvas.style.width  = "100vw";
+        canvas.style.height = "100vh";
       }
-
-      document.querySelector("#unity-loading-bar").style.display = "block";
 
       var script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = () => {
         createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
-              }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
+          document.querySelector("#progress-bar-fill").style.width = (100 * progress) + "%";
+        }).then((unityInstance) => {
+          // Loading ekranını yumuşakça kapat
+          var loadingScreen = document.querySelector("#loading-screen");
+          loadingScreen.classList.add("hidden");
+          setTimeout(function() { loadingScreen.style.display = "none"; }, 650);
 
-              }).catch((message) => {
-                alert(message);
-              });
-            };
+          document.querySelector("#unity-fullscreen-button").onclick = () => {
+            unityInstance.SetFullscreen(1);
+          };
+        }).catch((message) => {
+          alert(message);
+        });
+      };
 
       document.body.appendChild(script);
-
     </script>
   </body>
 </html>
